@@ -1,0 +1,57 @@
+# Development files
+.git/
+.gitignore
+.npmignore
+.eslintrc*
+.prettierrc*
+*.config.js
+*.config.ts
+
+# Documentation (except README, CHANGELOG, CONTRIBUTING)
+docs/
+*.md
+!README.md
+!CHANGELOG.md
+!CONTRIBUTING.md
+
+# Test files
+test/
+tests/
+__tests__/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Development dependencies
+node_modules/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env*
+
+# Cache
+.cache/
+*.tsbuildinfo
+
+# Build artifacts (keep only what's needed)
+src/
+!admin/
+!server/
