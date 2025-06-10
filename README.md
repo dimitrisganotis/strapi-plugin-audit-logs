@@ -1,34 +1,40 @@
 # Strapi Audit Logs Plugin
 
-A comprehensive audit logging plugin for Strapi that tracks all user interactions and system events with a clean admin interface and automatic cleanup.
+A comprehensive audit logging plugin for **Strapi v5** that tracks all user interactions and system events with a clean admin interface and automatic cleanup.
+
+> ⚠️ **Version Compatibility**
+> - **v2.x**: Supports Strapi v5 only
+> - **v1.x**: Supports Strapi v4 only
+>
+> If you're using Strapi v4, please install v1.x: `npm install strapi-plugin-audit-logs@^1.0.0`
 
 ## ✨ Features
 
 - 🔍 **Comprehensive Logging**: Track content operations, media uploads, user management, and authentication events
 - 🎯 **Smart Event Tracking**: Automatically logs content creation, updates, deletions, publishing, and more
 - 🔒 **Data Security**: Configurable sensitive data redaction
-- 🗂️ **Rich Admin UI**: Beautiful interface with filtering, search, and detailed log views
+- 🗂️ **Rich Admin UI**: Beautiful interface with filtering, search, pagination, and detailed log views
 - 🧹 **Automatic Cleanup**: Configurable log retention with manual cleanup option
 - 📊 **Detailed Logging**: Captures user info, IP addresses, HTTP context, and operation details
-- 🔐 **Simple Permissions**: Basic read access with super admin cleanup controls
+- 🔐 **Role-Based Permissions**: Granular access control with super admin cleanup controls
 
 ## 🚀 Installation
 
 ### Using NPM
 
 ```bash
-npm install strapi-plugin-audit-logs
+npm install strapi-plugin-audit-logs@^2.0.0
 ```
 
 ### Using Yarn
 
 ```bash
-yarn add strapi-plugin-audit-logs
+yarn add strapi-plugin-audit-logs@^2.0.0
 ```
 
 ## ⚙️ Configuration
 
-After installation, you need to configure the plugin in your `config/plugins.js` (or `config/plugins.ts` for TypeScript):
+After installation, configure the plugin in your `config/plugins.js` (or `config/plugins.ts` for TypeScript):
 
 ```javascript
 module.exports = {
@@ -38,17 +44,16 @@ module.exports = {
       enabled: true,
       deletion: {
         enabled: true,
-        frequency: "logAge",
+        frequency: "logAge", // 'logAge' or 'logCount'
         options: {
-          value: 90,
-          interval: "day",
+          value: 90, // Keep logs for 90 days
+          interval: "day", // 'day', 'week', 'month', 'year'
         },
       },
       excludeContentTypes: [
         "plugin::any-custom-type.any-custom-type",
       ],
       excludeEndpoints: [
-        "/_health",
         "/admin/renew-token",
         "/api/upload",
         "/api/any-custom-type/any-custom-route",
@@ -70,6 +75,7 @@ module.exports = {
           "entry.publish",
           "entry.unpublish",
           "media.create",
+          "media.update",
           "media.delete",
           "media-folder.create",
           "media-folder.update",
@@ -77,7 +83,11 @@ module.exports = {
           "user.create",
           "user.update",
           "user.delete",
+          "role.create",
+          "role.update",
+          "role.delete",
           "admin.auth.success",
+          "admin.auth.failure",
           "admin.logout",
         ],
       },
@@ -142,6 +152,9 @@ Array of API endpoints to exclude from logging. Supports:
 - **Prefix matches**: `/admin/renew-token` (matches `/admin/renew-token/anything`)
 - **Wildcards**: `/api/upload/*` (matches any endpoint starting with `/api/upload/`)
 
+#### `excludeContentTypes`
+Array of content type UIDs to exclude from logging (e.g., `["api::private-content.private-content"]`)
+
 #### `redactedValues`
 Array of field names to redact in logged data for security purposes.
 
@@ -162,18 +175,25 @@ The plugin automatically tracks these system events:
 
 ### Media Events
 - `media.create` - Media file uploaded
+- `media.update` - Media file updated
 - `media.delete` - Media file deleted
 - `media-folder.create` - Media folder created
 - `media-folder.update` - Media folder updated
 - `media-folder.delete` - Media folder deleted
 
-### User Events
+### User Management Events
 - `user.create` - User account created
 - `user.update` - User account updated
 - `user.delete` - User account deleted
 
+### Role Management Events
+- `role.create` - Role created
+- `role.update` - Role updated
+- `role.delete` - Role deleted
+
 ### Authentication Events
 - `admin.auth.success` - Successful admin login
+- `admin.auth.failure` - Failed admin login attempt
 - `admin.logout` - Admin logout
 
 ## 🎯 Usage
@@ -190,7 +210,7 @@ The audit logs interface provides:
 - **Table View**: See all logs with action, date, user, method, status, and IP address
 - **Action Filter**: Dropdown to filter by specific action types
 - **User Search**: Text input to search by username or email
-- **Pagination**: Navigate through large numbers of logs
+- **Advanced Pagination**: Page size selector (10, 25, 50, 100) with smart navigation
 - **Details Modal**: Click "View" to see full log details including JSON payload data
 
 ### Log Details
@@ -203,6 +223,7 @@ Each log entry contains:
 - **Status Code**: Response status code (with color coding)
 - **IP Address**: Client IP address
 - **User Agent**: Client browser/application
+
 - **Payload Data**: Full operation details in JSON format
 
 ### Manual Cleanup
@@ -211,7 +232,7 @@ Super administrators can manually trigger log cleanup by clicking the "Cleanup O
 
 ## 🔐 Permissions
 
-The plugin uses a simplified permission system:
+The plugin uses a role-based permission system:
 
 - **View Audit Logs**: Basic access to view the audit logs page and browse logs
 - **View Details**: Access to detailed log information (available to all users with read access)
@@ -239,6 +260,7 @@ The plugin creates an `audit_logs` table with these fields:
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | Primary Key | Unique identifier |
+| `documentId` | String | Document identifier (Strapi v5) |
 | `action` | String | Action performed (e.g., entry.create, media.delete) |
 | `date` | DateTime | Timestamp of the action |
 | `payload` | JSON | Operation details and context |
@@ -250,6 +272,7 @@ The plugin creates an `audit_logs` table with these fields:
 | `statusCode` | Integer | HTTP response status code |
 | `ipAddress` | String | Client IP address |
 | `userAgent` | Text | Client user agent string |
+
 
 ## 🔒 Security Considerations
 
@@ -275,11 +298,12 @@ The plugin creates an `audit_logs` table with these fields:
 ### Performance Issues
 1. Reduce the number of tracked events in configuration
 2. Decrease log retention period for faster cleanup
+3. Use `logCount` cleanup strategy for high-traffic sites
 
 ## 🔄 Compatibility
 
-- **Strapi**: 4.x
-- **Node.js**: 18.x, 20.x
+- **Strapi**: 5.x
+- **Node.js**: 18.x, 20.x, 22.x
 - **Database**: PostgreSQL, MySQL/MariaDB, SQLite
 - **Operating System**: Windows, macOS, Linux
 

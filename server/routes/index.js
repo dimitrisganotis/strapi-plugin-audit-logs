@@ -1,5 +1,8 @@
 const log = require("./log");
 
 module.exports = {
-  log,
+  admin: {
+    type: "admin",
+    routes: log,
+  },
 };

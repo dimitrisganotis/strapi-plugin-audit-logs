@@ -17,4 +17,6 @@ module.exports = ({ strapi }) => {
 
   // Register permissions immediately
   strapi.admin.services.permission.actionProvider.registerMany(actions);
+
+  strapi.log.info("Audit logs permissions registered");
 };

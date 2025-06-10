@@ -1,4 +1,3 @@
-import { prefixPluginTranslations } from "@strapi/helper-plugin";
 import pluginPkg from "../../package.json";
 import pluginId from "./pluginId";
 import Initializer from "./components/Initializer";
@@ -15,10 +14,7 @@ export default {
         id: `${pluginId}.plugin.name`,
         defaultMessage: "Audit Logs",
       },
-      Component: async () => {
-        const component = await import("./pages/App");
-        return component;
-      },
+      Component: () => import("./pages/App/index"),
       permissions: [
         {
           action: "plugin::audit-logs.read",
@@ -39,13 +35,17 @@ export default {
     // Plugin is ready
   },
 
-  async registerTrads({ locales }) {
+  async registerTrads(app) {
+    const { locales } = app;
     const importedTrads = await Promise.all(
-      locales.map((locale) => {
+      (locales || []).map((locale) => {
         return import(`./translations/${locale}.json`)
           .then(({ default: data }) => {
             return {
-              data: prefixPluginTranslations(data, pluginId),
+              data: Object.keys(data).reduce((acc, current) => {
+                acc[`${pluginId}.${current}`] = data[current];
+                return acc;
+              }, {}),
               locale,
             };
           })

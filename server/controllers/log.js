@@ -37,12 +37,12 @@ module.exports = ({ strapi }) => ({
         }
       }
 
-      // Parse and validate filters
+      // Parse and validate filters using Strapi v5 Document Service API syntax
       const filters = {};
 
-      // Handle action type dropdown (exact match)
-      if (query.actionType && typeof query.actionType === "string") {
-        filters.action = query.actionType.trim();
+      // Handle action filter (the frontend sends 'action' parameter)
+      if (query.action && typeof query.action === "string") {
+        filters.action = { $eq: query.action.trim() };
       }
 
       if (query.user && typeof query.user === "string") {
@@ -68,22 +68,43 @@ module.exports = ({ strapi }) => ({
       const auditLogService = strapi.plugin("audit-logs").service("log");
 
       // Debug log to see what filters are being applied
-      // strapi.log.debug("Audit logs query filters:", {
-      //   filters,
-      //   sort,
-      //   start,
-      //   limit,
-      // });
+      strapi.log.debug("Audit logs query filters:", {
+        filters,
+        sort,
+        start,
+        limit,
+        originalQuery: query,
+      });
 
-      const [logs, total] = await Promise.all([
-        auditLogService.findMany({
-          filters,
-          sort,
-          start,
-          limit,
-        }),
-        auditLogService.count({ filters }),
-      ]);
+      // Check if the service and content type exist
+      if (!auditLogService) {
+        strapi.log.error("Audit log service not found");
+        ctx.body = {
+          data: [],
+          meta: { pagination: { page, pageSize, pageCount: 0, total: 0 } },
+        };
+        return;
+      }
+
+      let logs = [];
+      let total = 0;
+
+      try {
+        [logs, total] = await Promise.all([
+          auditLogService.findMany({
+            filters,
+            sort,
+            start,
+            limit,
+          }),
+          auditLogService.count({ filters }),
+        ]);
+      } catch (serviceError) {
+        strapi.log.error("Service call error:", serviceError);
+        // If content type doesn't exist yet or no data, return empty result
+        logs = [];
+        total = 0;
+      }
 
       const pagination = {
         page,
@@ -98,6 +119,11 @@ module.exports = ({ strapi }) => ({
       };
     } catch (error) {
       strapi.log.error("Failed to fetch audit logs:", error);
+      strapi.log.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
       ctx.throw(500, "Failed to fetch audit logs");
     }
   },
@@ -105,14 +131,13 @@ module.exports = ({ strapi }) => ({
   async findOne(ctx) {
     try {
       const { id } = ctx.params;
-      const numericId = parseInt(id);
 
-      if (!id || isNaN(numericId) || numericId <= 0) {
+      if (!id) {
         ctx.throw(400, "Invalid log ID");
       }
 
       const auditLogService = strapi.plugin("audit-logs").service("log");
-      const log = await auditLogService.findOne(numericId);
+      const log = await auditLogService.findOne(id);
 
       if (!log) {
         ctx.throw(404, "Audit log not found");
@@ -135,8 +160,9 @@ module.exports = ({ strapi }) => ({
       // Reuse the same filter parsing logic from find method
       const filters = {};
 
+      // Handle action filter (exact match, same as find method)
       if (query.action && typeof query.action === "string") {
-        filters.action = { $containsi: query.action.trim() };
+        filters.action = { $eq: query.action.trim() };
       }
 
       if (query.user && typeof query.user === "string") {
@@ -146,7 +172,7 @@ module.exports = ({ strapi }) => ({
       if (query.method && typeof query.method === "string") {
         const allowedMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"];
         if (allowedMethods.includes(query.method.toUpperCase())) {
-          filters.method = query.method.toUpperCase();
+          filters.method = { $eq: query.method.toUpperCase() };
         }
       }
 
@@ -178,11 +204,27 @@ module.exports = ({ strapi }) => ({
 
   async cleanup(ctx) {
     try {
+      // Check if user is super admin
+      const { user } = ctx.state;
+
+      if (!user || !user.roles || !Array.isArray(user.roles)) {
+        ctx.throw(403, "Access denied: Super admin role required");
+      }
+
+      const isSuperAdmin = user.roles.some(role =>
+        role.code === "strapi-super-admin" || role.name === "Super Admin"
+      );
+
+      if (!isSuperAdmin) {
+        ctx.throw(403, "Access denied: Super admin role required");
+      }
+
       const auditLogService = strapi.plugin("audit-logs").service("log");
-      await auditLogService.cleanupOldLogs();
+      const result = await auditLogService.cleanupOldLogs();
 
       ctx.body = {
         message: "Cleanup completed successfully",
+        deleted: result.count || 0,
       };
     } catch (error) {
       strapi.log.error("Failed to cleanup audit logs:", error);

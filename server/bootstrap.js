@@ -1,6 +1,6 @@
 module.exports = ({ strapi }) => {
   const pluginConfig =
-    strapi.config.get("plugin.audit-logs") ||
+    strapi.config.get("plugin::audit-logs") ||
     strapi.plugin("audit-logs").config;
 
   if (!pluginConfig?.enabled) {
@@ -10,7 +10,7 @@ module.exports = ({ strapi }) => {
   const auditLogService = strapi.plugin("audit-logs").service("log");
 
   // Setup event listeners for entity operations
-  auditLogService.setupEventListeners();
+  auditLogService.initializeEventListeners();
 
   // Setup cleanup job
   auditLogService.setupCleanupJob();

@@ -1,9 +1,10 @@
 {
   "name": "strapi-plugin-audit-logs",
-  "version": "1.0.1",
-  "description": "Comprehensive audit logging plugin for Strapi that tracks all user interactions and system events with a clean admin interface and automatic cleanup",
+  "version": "2.0.0",
+  "description": "Comprehensive audit logging plugin for Strapi v5 that tracks all user interactions and system events with a clean admin interface and automatic cleanup",
   "keywords": [
     "strapi",
+    "strapi5",
     "plugin",
     "audit",
     "logs",
@@ -24,7 +25,18 @@
   },
   "license": "MIT",
   "author": "Dimitris Ganotis <dimitrisgan97@gmail.com>",
+  "strapi": {
+    "name": "audit-logs",
+    "displayName": "Audit Logs",
+    "description": "Track all user interactions and system events with comprehensive audit logging for Strapi v5",
+    "kind": "plugin"
+  },
   "main": "./strapi-server.js",
+  "exports": {
+    "./strapi-admin": "./strapi-admin.js",
+    "./strapi-server": "./strapi-server.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "admin/",
     "server/",
@@ -37,33 +49,20 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@strapi/design-system": "^1.6.3",
-    "@strapi/helper-plugin": "^4.6.0",
-    "@strapi/icons": "^1.6.3",
-    "node-schedule": "^2.1.0",
-    "prop-types": "^15.7.2"
+    "node-schedule": "^2.1.0"
   },
-  "devDependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^5.3.4",
-    "styled-components": "^5.3.6"
-  },
+  "devDependencies": {},
   "peerDependencies": {
-    "@strapi/strapi": "^4.0.0",
-    "react": "^17.0.0 || ^18.0.0",
-    "react-dom": "^17.0.0 || ^18.0.0",
-    "react-router-dom": "^5.2.0",
-    "styled-components": "^5.2.1"
+    "@strapi/design-system": "2.0.0-rc.25",
+    "@strapi/icons": "2.0.0-rc.25",
+    "@strapi/strapi": "^5.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-router-dom": "^6.0.0",
+    "styled-components": "^6.0.0"
   },
   "engines": {
-    "node": ">=18.0.0 <=20.x.x",
+    "node": ">=18.0.0 <=22.x.x",
     "npm": ">=6.0.0"
-  },
-  "strapi": {
-    "name": "audit-logs",
-    "description": "Track all user interactions and system events with comprehensive audit logging",
-    "kind": "plugin",
-    "displayName": "Audit Logs"
   }
 }
