@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2025-06-10
+
+### 🐛 Fixed
+
+- **Translation Loading Error**: Fixed "Module not found: ./translations/fr.json" error
+  - Plugin no longer crashes when Strapi is set to French or other unsupported locales
+  - Implemented proper fallback system where non-English locales fall back to English translations
+  - Future-ready for additional language support with robust error handling
+
+## [2.0.1] - 2025-06-10
+
+### 🐛 Fixed
+
+- **Peer Dependencies**: Relaxed version constraints for better compatibility
+  - Changed `@strapi/design-system` from exact `2.0.0-rc.25` to flexible `^2.0.0-rc.0`
+  - Changed `@strapi/icons` from exact `2.0.0-rc.25` to flexible `^2.0.0-rc.0`
+  - Resolves npm install conflicts with different Strapi v5 release candidates
+
 ## [2.0.0] - 2025-06-10
 
 ### 🚀 Added

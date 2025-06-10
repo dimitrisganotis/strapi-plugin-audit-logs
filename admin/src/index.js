@@ -37,24 +37,46 @@ export default {
 
   async registerTrads(app) {
     const { locales } = app;
+
     const importedTrads = await Promise.all(
-      (locales || []).map((locale) => {
-        return import(`./translations/${locale}.json`)
-          .then(({ default: data }) => {
-            return {
-              data: Object.keys(data).reduce((acc, current) => {
-                acc[`${pluginId}.${current}`] = data[current];
-                return acc;
-              }, {}),
-              locale,
-            };
-          })
-          .catch(() => {
+      (locales || []).map(async (locale) => {
+        try {
+          // Try to load the requested locale first
+          const { default: data } = await import(`./translations/${locale}.json`);
+          return {
+            data: Object.keys(data).reduce((acc, current) => {
+              acc[`${pluginId}.${current}`] = data[current];
+              return acc;
+            }, {}),
+            locale,
+          };
+        } catch (error) {
+          // If the requested locale doesn't exist, try to fall back to English
+          if (locale !== 'en') {
+            try {
+              const { default: data } = await import(`./translations/en.json`);
+              return {
+                data: Object.keys(data).reduce((acc, current) => {
+                  acc[`${pluginId}.${current}`] = data[current];
+                  return acc;
+                }, {}),
+                locale,
+              };
+            } catch (fallbackError) {
+              // If even English doesn't exist, return empty data
+              return {
+                data: {},
+                locale,
+              };
+            }
+          } else {
+            // If English itself doesn't exist, return empty data
             return {
               data: {},
               locale,
             };
-          });
+          }
+        }
       })
     );
 

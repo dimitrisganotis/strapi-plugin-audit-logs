@@ -1,6 +1,6 @@
 {
   "name": "strapi-plugin-audit-logs",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "description": "Comprehensive audit logging plugin for Strapi v5 that tracks all user interactions and system events with a clean admin interface and automatic cleanup",
   "keywords": [
     "strapi",
