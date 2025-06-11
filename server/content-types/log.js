@@ -15,7 +15,7 @@ module.exports = {
   },
   pluginOptions: {
     "content-manager": {
-      visible: true,
+      visible: false,
     },
     "content-type-builder": {
       visible: false,
