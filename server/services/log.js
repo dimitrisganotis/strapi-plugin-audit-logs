@@ -324,7 +324,24 @@ module.exports = ({ strapi }) => ({
     }
 
     // Helper function to get event type from operation and UID
-    const getEventType = (uid, operation, ctx) => {
+    const getEventType = (uid, operation) => {
+      const pluginOperationMap = {
+        "plugin::users-permissions.user": {
+          create: "user.create",
+          update: "user.update",
+          delete: "user.delete",
+        },
+        "plugin::users-permissions.role": {
+          create: "role.create",
+          update: "role.update",
+          delete: "role.delete",
+        },
+      };
+
+      if (pluginOperationMap[uid]) {
+        return pluginOperationMap[uid][operation] || null;
+      }
+
       // Skip system operations and special cases
       if (uid.startsWith("admin::") || uid.startsWith("plugin::")) {
         return null;
@@ -381,7 +398,7 @@ module.exports = ({ strapi }) => ({
           const documentId = result?.documentId || result?.id;
 
           // Map UID to correct event type and check if we should skip
-          const eventType = getEventType(uid, operation, ctx);
+          const eventType = getEventType(uid, operation);
 
           // Skip if this is a publish/unpublish operation (handled by HTTP middleware)
           if (!eventType) {

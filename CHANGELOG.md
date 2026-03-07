@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-03-07
+
+### Fixed
+
+- **Users & Permissions Document Events**: Added explicit `plugin::users-permissions.user` and `plugin::users-permissions.role` mappings in the Document Service middleware so user and role create, update, and delete operations triggered through Strapi v5 Content Manager are logged correctly
+
 ## [2.1.0] - 2026-03-07
 
 ### Added
