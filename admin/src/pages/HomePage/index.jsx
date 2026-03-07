@@ -1,114 +1,118 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  Badge,
   Box,
-  Typography,
-  Loader,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
   Button,
+  Dialog,
   Flex,
-  TextInput,
+  LinkButton,
+  Loader,
   SingleSelect,
   SingleSelectOption,
-  Dialog,
+  Table,
+  Tbody,
+  Td,
+  TextInput,
+  Th,
+  Thead,
+  Tr,
+  Typography,
 } from "@strapi/design-system";
-import { Eye, Trash, ArrowClockwise } from "@strapi/icons";
+import { ArrowClockwise, Eye } from "@strapi/icons";
 import { useIntl } from "react-intl";
 import {
+  Layouts,
   useFetchClient,
   useNotification,
-  Layouts,
   useRBAC,
 } from "@strapi/strapi/admin";
+import { fetchPluginConfig } from "../../api/config";
 import getTrad from "../../utils/getTrad";
 
-// Utility functions
-const formatDateString = (dateString) => {
+const DEFAULT_INDEX_TABLE_COLUMNS = [
+  "action",
+  "date",
+  "user",
+  "method",
+  "status",
+  "ipAddress",
+  "entry",
+];
+
+const ACTION_TYPES = [
+  "entry.create",
+  "entry.update",
+  "entry.delete",
+  "entry.publish",
+  "entry.unpublish",
+  "media.create",
+  "media.update",
+  "media.delete",
+  "media-folder.create",
+  "media-folder.update",
+  "media-folder.delete",
+  "user.create",
+  "user.update",
+  "user.delete",
+  "role.create",
+  "role.update",
+  "role.delete",
+  "admin.auth.success",
+  "admin.auth.failure",
+  "admin.logout",
+];
+
+const formatDateString = (dateString, options = {}) => {
   if (!dateString) return "-";
 
   try {
     const date = new Date(dateString);
-    // Check if the date is valid
-    if (isNaN(date.getTime())) {
-      return dateString; // Return original string if invalid
+
+    if (Number.isNaN(date.getTime())) {
+      return dateString;
     }
 
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(undefined, {
       dateStyle: "short",
       timeStyle: "short",
+      ...options,
     }).format(date);
   } catch (error) {
     return dateString || "-";
   }
 };
 
-const getUserDisplay = (user) => {
-  if (!user) return "System";
-  if (typeof user === "string") return user;
-  return (
-    user.username ||
-    user.email ||
-    `${user.firstname || ""} ${user.lastname || ""}`.trim() ||
-    "User"
-  );
-};
-
-// Helper function to get badge style based on action
-const getActionBadgeStyle = (action) => {
-  let backgroundColor = "#f6f6f9"; // neutral/gray
-  let color = "#32324d";
+const getActionBadge = (action, text) => {
+  let variant = "secondary";
 
   if (action && typeof action === "string") {
     const actionLower = action.toLowerCase();
 
     if (actionLower.includes("create") || actionLower.includes("success")) {
-      backgroundColor = "#c6f7d0"; // green
-      color = "#2f755a";
-    } else if (actionLower.includes("update")) {
-      backgroundColor = "#e0e6ff"; // blue
-      color = "#4945ff";
+      variant = "success";
+    } else if (actionLower.includes("update") || actionLower.includes("logout")) {
+      variant = "primary";
     } else if (actionLower.includes("delete")) {
-      backgroundColor = "#ffe6e6"; // red
-      color = "#d02b20";
-    } else if (actionLower.includes("publish")) {
-      backgroundColor = "#c6f7d0"; // success green
-      color = "#2f755a";
+      variant = "danger";
     } else if (actionLower.includes("unpublish")) {
-      backgroundColor = "#fff3cd"; // warning yellow
-      color = "#856404";
-    } else if (actionLower.includes("logout")) {
-      backgroundColor = "#e0e6ff"; // blue
-      color = "#4945ff";
+      variant = "warning";
+    } else if (actionLower.includes("publish")) {
+      variant = "success";
     }
   }
 
-  return {
-    backgroundColor,
-    color,
-    padding: "4px 8px",
-    borderRadius: "4px",
-    fontSize: "12px",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    display: "inline-block",
-    border: `1px solid ${backgroundColor}`,
-  };
+  return <Badge variant={variant}>{text}</Badge>;
 };
 
-// Helper function to get status badge style
 const getStatusBadgeStyle = (status) => {
-  let backgroundColor = "#f6f6f9"; // neutral
+  let backgroundColor = "#f6f6f9";
   let color = "#32324d";
 
   if (status >= 200 && status < 300) {
-    backgroundColor = "#c6f7d0"; // green
+    backgroundColor = "#c6f7d0";
     color = "#2f755a";
   } else if (status >= 400) {
-    backgroundColor = "#ffe6e6"; // red
+    backgroundColor = "#ffe6e6";
     color = "#d02b20";
   }
 
@@ -125,12 +129,19 @@ const getStatusBadgeStyle = (status) => {
   };
 };
 
+const canOpenEntry = (log) =>
+  log?.action?.startsWith("entry.") &&
+  Boolean(log?.payload?.uid) &&
+  Boolean(log?.payload?.id);
+
 const HomePage = () => {
   const { formatMessage } = useIntl();
   const { get, post } = useFetchClient();
   const { toggleNotification } = useNotification();
+  const [config, setConfig] = useState({
+    indexTableColumns: DEFAULT_INDEX_TABLE_COLUMNS,
+  });
 
-  // Check permissions for details access - using the correct Strapi v5 format
   const { isLoading: isLoadingPermissions, allowedActions } = useRBAC([
     {
       action: "plugin::audit-logs.details",
@@ -138,33 +149,7 @@ const HomePage = () => {
     },
   ]);
 
-  // Get user info using a direct API call instead of useAuth
   const [user, setUser] = useState(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await get("/admin/users/me");
-        // Extract the actual user data from the nested structure
-        setUser(response.data?.data || response.data);
-      } catch (error) {
-        setUser(null);
-      } finally {
-        setIsLoadingUser(false);
-      }
-    };
-
-    fetchUser();
-  }, [get]);
-
-  // Check if user is super admin - handle both nested and flat structure
-  const isSuperAdmin =
-    (user?.roles || user?.data?.roles)?.some(
-      (role) =>
-        role.code === "strapi-super-admin" || role.name === "Super Admin"
-    ) || false;
-
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({
@@ -181,6 +166,28 @@ const HomePage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
 
+  const getUserDisplay = (auditUser) => {
+    if (!auditUser) {
+      return formatMessage({ id: getTrad("fallback.system") });
+    }
+
+    if (typeof auditUser === "string") {
+      return auditUser;
+    }
+
+    return (
+      `${auditUser.firstname || ""} ${auditUser.lastname || ""}`.trim() ||
+      auditUser.username ||
+      auditUser.email ||
+      formatMessage({ id: getTrad("fallback.user") })
+    );
+  };
+
+  const getDisplayColumns = () =>
+    Array.isArray(config?.indexTableColumns)
+      ? config.indexTableColumns
+      : DEFAULT_INDEX_TABLE_COLUMNS;
+
   const buildQueryParams = () => {
     const params = new URLSearchParams({
       page: pagination.page,
@@ -188,10 +195,10 @@ const HomePage = () => {
       sort: "date:desc",
     });
 
-    // Only add filters if they have values
     if (filters.user && filters.user.trim()) {
       params.append("user", filters.user.trim());
     }
+
     if (filters.actionType && filters.actionType.trim()) {
       params.append("action", filters.actionType.trim());
     }
@@ -201,16 +208,20 @@ const HomePage = () => {
 
   const fetchLogs = async () => {
     setLoading(true);
+
     try {
       const query = buildQueryParams();
       const { data } = await get(`/audit-logs/audit-logs?${query}`);
+
       setLogs(data.data);
       setPagination(data.meta.pagination);
     } catch (error) {
       console.error("Error fetching logs:", error);
       toggleNotification({
         type: "danger",
-        message: "Failed to fetch audit logs",
+        message: formatMessage({
+          id: getTrad("notification.error.fetch"),
+        }),
       });
     } finally {
       setLoading(false);
@@ -219,17 +230,22 @@ const HomePage = () => {
 
   const handleCleanup = async () => {
     setIsCleaningUp(true);
+
     try {
       await post("/audit-logs/audit-logs/cleanup");
       toggleNotification({
         type: "success",
-        message: "Cleanup completed successfully",
+        message: formatMessage({
+          id: getTrad("notification.success.cleanup"),
+        }),
       });
       fetchLogs();
     } catch (error) {
       toggleNotification({
         type: "danger",
-        message: "Failed to cleanup logs",
+        message: formatMessage({
+          id: getTrad("notification.error.cleanup"),
+        }),
       });
     } finally {
       setIsCleaningUp(false);
@@ -237,48 +253,46 @@ const HomePage = () => {
   };
 
   const handleViewDetails = async (logId) => {
-    // Check if user has permission to view details
     if (!isLoadingPermissions && !allowedActions?.canDetails) {
       toggleNotification({
         type: "danger",
-        message: "You don't have permission to view log details",
+        message: formatMessage({
+          id: getTrad("notification.error.permissions"),
+        }),
       });
       return;
     }
 
     try {
-      setIsModalOpen(true); // Open modal first
+      setIsModalOpen(true);
       const response = await get(`/audit-logs/audit-logs/${logId}`);
-
-      // Find the log in the current logs array as fallback
       const fallbackLog = logs.find((log) => log.id === logId);
 
-      // Use response data if available, otherwise use fallback
       setSelectedLog(response.data?.data || response.data || fallbackLog);
     } catch (error) {
       console.error("Failed to fetch log details:", error);
 
-      // Use the log from current list as fallback
       const fallbackLog = logs.find((log) => log.id === logId);
+
       if (fallbackLog) {
         setSelectedLog(fallbackLog);
       } else {
         toggleNotification({
           type: "danger",
-          message: "Failed to fetch log details",
+          message: formatMessage({
+            id: getTrad("notification.error.details"),
+          }),
         });
         setIsModalOpen(false);
       }
     }
   };
 
-  // Reset pagination when filters change
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
-    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to page 1 when filtering
+    setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
-  // Clear all filters
   const clearFilters = () => {
     handleFilterChange({
       user: "",
@@ -287,14 +301,54 @@ const HomePage = () => {
   };
 
   useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await get("/admin/users/me");
+        setUser(response.data?.data || response.data);
+      } catch (error) {
+        setUser(null);
+      }
+    };
+
+    fetchUser();
+  }, [get]);
+
+  useEffect(() => {
     fetchLogs();
   }, [pagination.page, pagination.pageSize, filters.user, filters.actionType]);
+
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const pluginConfig = await fetchPluginConfig();
+        if (Array.isArray(pluginConfig?.indexTableColumns)) {
+          setConfig(pluginConfig);
+        }
+      } catch (error) {
+        setConfig({ indexTableColumns: DEFAULT_INDEX_TABLE_COLUMNS });
+      }
+    };
+
+    loadConfig();
+  }, []);
+
+  const isSuperAdmin =
+    (user?.roles || user?.data?.roles)?.some(
+      (role) =>
+        role.code === "strapi-super-admin" || role.name === "Super Admin",
+    ) || false;
+
+  const displayColumns = getDisplayColumns();
 
   return (
     <>
       <Layouts.Header
-        title="Audit Logs"
-        subtitle="Logs of the activities that happened in the environment"
+        title={formatMessage({
+          id: getTrad("page.title"),
+        })}
+        subtitle={formatMessage({
+          id: getTrad("page.subtitle"),
+        })}
         primaryAction={
           <Flex gap={2}>
             <Button
@@ -302,7 +356,9 @@ const HomePage = () => {
               startIcon={<ArrowClockwise />}
               onClick={fetchLogs}
             >
-              Refresh
+              {formatMessage({
+                id: getTrad("button.refresh"),
+              })}
             </Button>
             {isSuperAdmin && (
               <Button
@@ -311,7 +367,9 @@ const HomePage = () => {
                 onClick={handleCleanup}
                 loading={isCleaningUp}
               >
-                Cleanup Logs
+                {formatMessage({
+                  id: getTrad("button.cleanup"),
+                })}
               </Button>
             )}
           </Flex>
@@ -319,7 +377,6 @@ const HomePage = () => {
       />
 
       <Layouts.Content>
-        {/* Filters Section */}
         <Box
           background="neutral0"
           hasRadius
@@ -330,86 +387,39 @@ const HomePage = () => {
           paddingRight={6}
           marginBottom={4}
         >
-          <Flex gap={4} alignItems="end">
+          <Flex gap={4} alignItems="center">
             <TextInput
-              placeholder="User"
+              placeholder={formatMessage({
+                id: getTrad("filter.user"),
+              })}
               value={filters.user}
-              onChange={(e) =>
-                handleFilterChange({ ...filters, user: e.target.value })
+              onChange={(event) =>
+                handleFilterChange({ ...filters, user: event.target.value })
               }
             />
             <SingleSelect
-              placeholder="Action Type"
+              placeholder={formatMessage({
+                id: getTrad("filter.action"),
+              })}
               value={filters.actionType}
               onChange={(value) =>
                 handleFilterChange({ ...filters, actionType: value })
               }
               onClear={() => handleFilterChange({ ...filters, actionType: "" })}
             >
-              <SingleSelectOption value="entry.create">
-                Entry Create
-              </SingleSelectOption>
-              <SingleSelectOption value="entry.update">
-                Entry Update
-              </SingleSelectOption>
-              <SingleSelectOption value="entry.delete">
-                Entry Delete
-              </SingleSelectOption>
-              <SingleSelectOption value="entry.publish">
-                Entry Publish
-              </SingleSelectOption>
-              <SingleSelectOption value="entry.unpublish">
-                Entry Unpublish
-              </SingleSelectOption>
-              <SingleSelectOption value="media.create">
-                Media Create
-              </SingleSelectOption>
-              <SingleSelectOption value="media.update">
-                Media Update
-              </SingleSelectOption>
-              <SingleSelectOption value="media.delete">
-                Media Delete
-              </SingleSelectOption>
-              <SingleSelectOption value="media-folder.create">
-                Media Folder Create
-              </SingleSelectOption>
-              <SingleSelectOption value="media-folder.update">
-                Media Folder Update
-              </SingleSelectOption>
-              <SingleSelectOption value="media-folder.delete">
-                Media Folder Delete
-              </SingleSelectOption>
-              <SingleSelectOption value="user.create">
-                User Create
-              </SingleSelectOption>
-              <SingleSelectOption value="user.update">
-                User Update
-              </SingleSelectOption>
-              <SingleSelectOption value="user.delete">
-                User Delete
-              </SingleSelectOption>
-              <SingleSelectOption value="role.create">
-                Role Create
-              </SingleSelectOption>
-              <SingleSelectOption value="role.update">
-                Role Update
-              </SingleSelectOption>
-              <SingleSelectOption value="role.delete">
-                Role Delete
-              </SingleSelectOption>
-              <SingleSelectOption value="admin.auth.success">
-                Login Success
-              </SingleSelectOption>
-              <SingleSelectOption value="admin.auth.failure">
-                Login Failure
-              </SingleSelectOption>
-              <SingleSelectOption value="admin.logout">
-                Logout
-              </SingleSelectOption>
+              {ACTION_TYPES.map((actionType) => (
+                <SingleSelectOption key={actionType} value={actionType}>
+                  {formatMessage({
+                    id: getTrad(actionType),
+                  })}
+                </SingleSelectOption>
+              ))}
             </SingleSelect>
             {(filters.user || filters.actionType) && (
               <Button variant="tertiary" onClick={clearFilters}>
-                Clear Filters
+                {formatMessage({
+                  id: getTrad("button.clearFilters"),
+                })}
               </Button>
             )}
           </Flex>
@@ -421,79 +431,124 @@ const HomePage = () => {
           </Box>
         ) : (
           <>
-            <Table colCount={7} rowCount={logs.length}>
+            <Table colCount={displayColumns.length + 1} rowCount={logs.length}>
               <Thead>
                 <Tr>
-                  <Th>
-                    <Typography variant="sigma">Action</Typography>
-                  </Th>
-                  <Th>
-                    <Typography variant="sigma">Date</Typography>
-                  </Th>
-                  <Th>
-                    <Typography variant="sigma">User</Typography>
-                  </Th>
-                  <Th>
-                    <Typography variant="sigma">Method</Typography>
-                  </Th>
-                  <Th>
-                    <Typography variant="sigma">Status</Typography>
-                  </Th>
-                  <Th>
-                    <Typography variant="sigma">IP Address</Typography>
-                  </Th>
-                  <Th>
-                    <Typography variant="sigma">Actions</Typography>
+                  {displayColumns.map((column) => (
+                    <Th key={column}>
+                      <Typography variant="sigma">
+                        {formatMessage({
+                          id: getTrad(`table.${column}`),
+                        })}
+                      </Typography>
+                    </Th>
+                  ))}
+                  <Th key="actions">
+                    <Typography variant="sigma">
+                      {formatMessage({
+                        id: getTrad("table.actions"),
+                      })}
+                    </Typography>
                   </Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {logs.map((log) => (
                   <Tr key={log.id}>
-                    <Td>
-                      <Typography style={getActionBadgeStyle(log.action)}>
-                        {log.action}
-                      </Typography>
-                    </Td>
-                    <Td>
-                      <Typography variant="sigma">
-                        {formatDateString(log.date)}
-                      </Typography>
-                    </Td>
-                    <Td>
-                      <Typography variant="sigma">
-                        {getUserDisplay(log.user)}
-                      </Typography>
-                    </Td>
-                    <Td>
-                      <Typography variant="sigma">
-                        {log.method || "-"}
-                      </Typography>
-                    </Td>
-                    <Td>
-                      {log.statusCode && (
-                        <Typography style={getStatusBadgeStyle(log.statusCode)}>
-                          {log.statusCode}
-                        </Typography>
-                      )}
-                    </Td>
-                    <Td>
-                      <Typography variant="sigma">
-                        {log.ipAddress || "-"}
-                      </Typography>
-                    </Td>
+                    {displayColumns.map((column) => {
+                      switch (column) {
+                        case "action":
+                          return (
+                            <Td key={column}>
+                              {getActionBadge(
+                                log.action,
+                                formatMessage({
+                                  id: getTrad(log.action),
+                                }),
+                              )}
+                            </Td>
+                          );
+                        case "date":
+                          return (
+                            <Td key={column}>
+                              <Typography variant="sigma">
+                                {formatDateString(log.date)}
+                              </Typography>
+                            </Td>
+                          );
+                        case "user":
+                          return (
+                            <Td key={column}>
+                              <Typography variant="sigma">
+                                {getUserDisplay(log.user)}
+                              </Typography>
+                            </Td>
+                          );
+                        case "method":
+                          return (
+                            <Td key={column}>
+                              <Typography variant="sigma">
+                                {log.method || "-"}
+                              </Typography>
+                            </Td>
+                          );
+                        case "status":
+                          return (
+                            <Td key={column}>
+                              {log.statusCode ? (
+                                <Typography
+                                  style={getStatusBadgeStyle(log.statusCode)}
+                                >
+                                  {log.statusCode}
+                                </Typography>
+                              ) : (
+                                <Typography variant="sigma">-</Typography>
+                              )}
+                            </Td>
+                          );
+                        case "ipAddress":
+                          return (
+                            <Td key={column}>
+                              <Typography variant="sigma">
+                                {log.ipAddress || "-"}
+                              </Typography>
+                            </Td>
+                          );
+                        case "entry":
+                          return (
+                            <Td key={column}>
+                              {canOpenEntry(log) ? (
+                                <LinkButton
+                                  variant="secondary"
+                                  href={`/admin/content-manager/collection-types/${log.payload.uid}/${log.payload.id}`}
+                                >
+                                  {formatMessage({
+                                    id: getTrad("entry.show"),
+                                  })}
+                                </LinkButton>
+                              ) : null}
+                            </Td>
+                          );
+                        default:
+                          return <Td key={column} />;
+                      }
+                    })}
                     <Td>
                       {!isLoadingPermissions && allowedActions?.canDetails ? (
                         <Button
-                          variant="ghost"
+                          variant="secondary"
                           startIcon={<Eye />}
                           onClick={() => handleViewDetails(log.id)}
                         >
-                          View
+                          {formatMessage({
+                            id: getTrad("button.viewDetails"),
+                          })}
                         </Button>
                       ) : (
                         <Typography variant="sigma" textColor="neutral500">
-                          No access
+                          {formatMessage({
+                            id: getTrad("button.noAccess"),
+                          })}
                         </Typography>
                       )}
                     </Td>
@@ -502,10 +557,8 @@ const HomePage = () => {
               </Tbody>
             </Table>
 
-            {/* Pagination */}
             {pagination.pageCount > 1 && (
               <Box paddingTop={4} paddingBottom={6}>
-                {/* Page size selector */}
                 <Flex
                   justifyContent="space-between"
                   alignItems="center"
@@ -513,15 +566,18 @@ const HomePage = () => {
                 >
                   <Flex gap={2} alignItems="center">
                     <Typography variant="pi" textColor="neutral600">
-                      Show:
+                      {formatMessage({
+                        id: getTrad("pagination.show"),
+                      })}
+                      :
                     </Typography>
                     <SingleSelect
                       value={pagination.pageSize}
                       onChange={(value) => {
                         setPagination({
                           ...pagination,
-                          pageSize: parseInt(value),
-                          page: 1, // Reset to first page when changing page size
+                          pageSize: parseInt(value, 10),
+                          page: 1,
                         });
                       }}
                     >
@@ -531,12 +587,17 @@ const HomePage = () => {
                       <SingleSelectOption value="100">100</SingleSelectOption>
                     </SingleSelect>
                     <Typography variant="pi" textColor="neutral600">
-                      per page
+                      {formatMessage({
+                        id: getTrad("pagination.perPage"),
+                      })}
                     </Typography>
                   </Flex>
 
                   <Typography variant="pi" textColor="neutral500">
-                    {pagination.total} total results
+                    {pagination.total}{" "}
+                    {formatMessage({
+                      id: getTrad("pagination.totalResults"),
+                    })}
                   </Typography>
                 </Flex>
 
@@ -552,11 +613,21 @@ const HomePage = () => {
                       })
                     }
                   >
-                    ← Previous
+                    ←{" "}
+                    {formatMessage({
+                      id: getTrad("pagination.previous"),
+                    })}
                   </Button>
 
                   <Typography variant="pi" textColor="neutral600">
-                    Page {pagination.page} of {pagination.pageCount}
+                    {formatMessage({
+                      id: getTrad("pagination.page"),
+                    })}{" "}
+                    {pagination.page}{" "}
+                    {formatMessage({
+                      id: getTrad("pagination.of"),
+                    })}{" "}
+                    {pagination.pageCount}
                   </Typography>
 
                   <Button
@@ -570,10 +641,12 @@ const HomePage = () => {
                       })
                     }
                   >
-                    Next →
+                    {formatMessage({
+                      id: getTrad("pagination.next"),
+                    })}{" "}
+                    →
                   </Button>
 
-                  {/* Quick jump to pages */}
                   <Flex gap={1} paddingLeft={2}>
                     {[
                       1,
@@ -587,7 +660,7 @@ const HomePage = () => {
                         (page, index, arr) =>
                           page > 0 &&
                           page <= pagination.pageCount &&
-                          arr.indexOf(page) === index
+                          arr.indexOf(page) === index,
                       )
                       .sort((a, b) => a - b)
                       .map((page, index, arr) => (
@@ -603,7 +676,10 @@ const HomePage = () => {
                             }
                             size="S"
                             onClick={() =>
-                              setPagination({ ...pagination, page })
+                              setPagination({
+                                ...pagination,
+                                page,
+                              })
                             }
                           >
                             {page}
@@ -618,7 +694,6 @@ const HomePage = () => {
         )}
       </Layouts.Content>
 
-      {/* Modal */}
       {isModalOpen && (
         <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
           <Dialog.Content
@@ -633,7 +708,9 @@ const HomePage = () => {
           >
             <Dialog.Header>
               <Typography variant="beta" fontWeight="bold">
-                Audit Log Details
+                {formatMessage({
+                  id: getTrad("modal.title"),
+                })}
               </Typography>
             </Dialog.Header>
 
@@ -647,7 +724,11 @@ const HomePage = () => {
               {!selectedLog ? (
                 <Box padding={8} textAlign="center">
                   <Loader />
-                  <Typography paddingTop={2}>Loading log details...</Typography>
+                  <Typography paddingTop={2}>
+                    {formatMessage({
+                      id: getTrad("loading.details"),
+                    })}
+                  </Typography>
                 </Box>
               ) : (
                 <Box
@@ -659,52 +740,42 @@ const HomePage = () => {
                   <Flex direction="column" alignItems="stretch" gap={3}>
                     <Flex justifyContent="space-between" alignItems="center">
                       <Typography fontWeight="semiBold" textColor="neutral800">
-                        Action:
+                        {formatMessage({
+                          id: getTrad("modal.action"),
+                        })}
+                        :
                       </Typography>
-                      <Box
-                        padding={1}
-                        paddingLeft={2}
-                        paddingRight={2}
-                        hasRadius
-                        style={getActionBadgeStyle(selectedLog.action)}
-                      >
-                        <Typography
-                          variant="pi"
-                          fontWeight="bold"
-                          style={{ textTransform: "uppercase" }}
-                        >
-                          {selectedLog.action || "N/A"}
-                        </Typography>
+                      <Box padding={1} paddingLeft={2} paddingRight={2} hasRadius>
+                        {getActionBadge(
+                          selectedLog.action,
+                          formatMessage({
+                            id: getTrad(selectedLog.action),
+                          }),
+                        )}
                       </Box>
                     </Flex>
 
                     <Flex justifyContent="space-between" alignItems="center">
                       <Typography fontWeight="semiBold" textColor="neutral800">
-                        Date:
+                        {formatMessage({
+                          id: getTrad("modal.date"),
+                        })}
+                        :
                       </Typography>
                       <Typography variant="pi">
-                        {(() => {
-                          if (!selectedLog.date && !selectedLog.createdAt)
-                            return "-";
-                          const dateValue =
-                            selectedLog.date || selectedLog.createdAt;
-                          try {
-                            const date = new Date(dateValue);
-                            if (isNaN(date.getTime())) return dateValue;
-                            return new Intl.DateTimeFormat("en-GB", {
-                              dateStyle: "full",
-                              timeStyle: "long",
-                            }).format(date);
-                          } catch {
-                            return dateValue || "-";
-                          }
-                        })()}
+                        {formatDateString(selectedLog.date || selectedLog.createdAt, {
+                          dateStyle: "full",
+                          timeStyle: "long",
+                        })}
                       </Typography>
                     </Flex>
 
                     <Flex justifyContent="space-between" alignItems="center">
                       <Typography fontWeight="semiBold" textColor="neutral800">
-                        User:
+                        {formatMessage({
+                          id: getTrad("modal.user"),
+                        })}
+                        :
                       </Typography>
                       <Typography variant="pi">
                         {getUserDisplay(selectedLog.user)}
@@ -717,7 +788,10 @@ const HomePage = () => {
                           fontWeight="semiBold"
                           textColor="neutral800"
                         >
-                          Endpoint:
+                          {formatMessage({
+                            id: getTrad("modal.endpoint"),
+                          })}
+                          :
                         </Typography>
                         <Typography variant="pi" fontFamily="Monaco, monospace">
                           {selectedLog.endpoint || selectedLog.url}
@@ -731,7 +805,10 @@ const HomePage = () => {
                           fontWeight="semiBold"
                           textColor="neutral800"
                         >
-                          Method:
+                          {formatMessage({
+                            id: getTrad("modal.method"),
+                          })}
+                          :
                         </Typography>
                         <Typography variant="pi" fontWeight="bold">
                           {selectedLog.method}
@@ -745,7 +822,10 @@ const HomePage = () => {
                           fontWeight="semiBold"
                           textColor="neutral800"
                         >
-                          Status:
+                          {formatMessage({
+                            id: getTrad("modal.status"),
+                          })}
+                          :
                         </Typography>
                         <Box
                           padding={1}
@@ -767,7 +847,10 @@ const HomePage = () => {
                           fontWeight="semiBold"
                           textColor="neutral800"
                         >
-                          IP Address:
+                          {formatMessage({
+                            id: getTrad("modal.ipAddress"),
+                          })}
+                          :
                         </Typography>
                         <Typography variant="pi" fontFamily="Monaco, monospace">
                           {selectedLog.ipAddress}
@@ -782,7 +865,10 @@ const HomePage = () => {
                           textColor="neutral800"
                           paddingBottom={2}
                         >
-                          User Agent:
+                          {formatMessage({
+                            id: getTrad("modal.userAgent"),
+                          })}
+                          :
                         </Typography>
                         <Box
                           background="neutral0"
@@ -804,7 +890,10 @@ const HomePage = () => {
                           textColor="neutral800"
                           paddingBottom={2}
                         >
-                          Data:
+                          {formatMessage({
+                            id: getTrad("modal.payload"),
+                          })}
+                          :
                         </Typography>
                         <Box
                           background="neutral0"
@@ -820,10 +909,7 @@ const HomePage = () => {
                         >
                           <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                             {(() => {
-                              const data =
-                                selectedLog.payload || selectedLog.data;
-
-                              // Filter out fields that are already displayed above
+                              const data = selectedLog.payload || selectedLog.data;
                               const fieldsToExclude = [
                                 "endpoint",
                                 "url",
@@ -836,14 +922,15 @@ const HomePage = () => {
 
                               const filteredData = Object.keys(data)
                                 .filter((key) => !fieldsToExclude.includes(key))
-                                .reduce((obj, key) => {
-                                  obj[key] = data[key];
-                                  return obj;
+                                .reduce((result, key) => {
+                                  result[key] = data[key];
+                                  return result;
                                 }, {});
 
-                              // If there's no unique data left, show a message
                               if (Object.keys(filteredData).length === 0) {
-                                return "No additional data to display";
+                                return formatMessage({
+                                  id: getTrad("modal.noAdditionalData"),
+                                });
                               }
 
                               return JSON.stringify(filteredData, null, 2);
@@ -859,7 +946,9 @@ const HomePage = () => {
 
             <Dialog.Footer>
               <Button onClick={() => setIsModalOpen(false)} variant="secondary">
-                Close
+                {formatMessage({
+                  id: getTrad("modal.close"),
+                })}
               </Button>
             </Dialog.Footer>
           </Dialog.Content>

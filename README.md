@@ -23,13 +23,13 @@ A comprehensive audit logging plugin for **Strapi v5** that tracks all user inte
 ### Using NPM
 
 ```bash
-npm install strapi-plugin-audit-logs@^2.0.0
+npm install strapi-plugin-audit-logs@^2.1.0
 ```
 
 ### Using Yarn
 
 ```bash
-yarn add strapi-plugin-audit-logs@^2.0.0
+yarn add strapi-plugin-audit-logs@^2.1.0
 ```
 
 ## ⚙️ Configuration
@@ -89,6 +89,17 @@ module.exports = {
           "admin.auth.success",
           "admin.auth.failure",
           "admin.logout",
+        ],
+      },
+      adminPanel: {
+        indexTableColumns: [
+          "action",
+          "date",
+          "user",
+          "method",
+          "status",
+          "ipAddress",
+          "entry",
         ],
       },
     },
@@ -162,6 +173,12 @@ Array of field names to redact in logged data for security purposes.
 Configure automatic event tracking:
 - **track**: `string[]` - Array of events to log automatically
 
+#### `adminPanel`
+Configure the audit-log list view:
+- **indexTableColumns**: `('action' | 'date' | 'user' | 'method' | 'status' | 'ipAddress' | 'entry')[]`
+- **Default**: `["action", "date", "user", "method", "status", "ipAddress", "entry"]`
+- **Description**: Controls which data columns are rendered in the audit log table. The details/actions column is always displayed and cannot be removed.
+
 ## 📊 Tracked Events
 
 The plugin automatically tracks these system events:
@@ -207,11 +224,13 @@ The plugin automatically tracks these system events:
 ### Viewing Logs
 
 The audit logs interface provides:
-- **Table View**: See all logs with action, date, user, method, status, and IP address
+- **Table View**: See all logs with configurable columns for action, date, user, method, status, IP address, and direct entry links
 - **Action Filter**: Dropdown to filter by specific action types
 - **User Search**: Text input to search by username or email
 - **Advanced Pagination**: Page size selector (10, 25, 50, 100) with smart navigation
 - **Details Modal**: Click "View" to see full log details including JSON payload data
+
+If `adminPanel.indexTableColumns` includes `entry`, entry-related logs with a known content type UID and document ID will show an **Open Entry** button that links directly to the Content Manager edit view.
 
 ### Log Details
 
@@ -251,6 +270,7 @@ The plugin provides these API endpoints (admin authentication required):
 - `GET /admin/audit-logs` - List audit logs with filtering and pagination
 - `GET /admin/audit-logs/:id` - Get specific log details
 - `GET /admin/audit-logs/count` - Count total logs
+- `GET /admin/audit-logs/config` - Get admin panel table configuration
 - `POST /admin/audit-logs/cleanup` - Trigger manual cleanup (super admin only)
 
 ## 🗄️ Database Schema

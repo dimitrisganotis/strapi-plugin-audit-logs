@@ -1,3 +1,8 @@
+const {
+  DEFAULT_INDEX_TABLE_COLUMNS,
+  ALLOWED_INDEX_TABLE_COLUMNS,
+} = require("./admin-panel");
+
 module.exports = {
   default: {
     enabled: true,
@@ -46,6 +51,41 @@ module.exports = {
         "role.delete",
       ],
     },
+    adminPanel: {
+      indexTableColumns: DEFAULT_INDEX_TABLE_COLUMNS,
+    },
   },
-  validator: () => {},
+  validator(config) {
+    const columns = config?.adminPanel?.indexTableColumns;
+
+    if (!Array.isArray(columns)) {
+      throw new Error(
+        "adminPanel.indexTableColumns must be an array of supported column names",
+      );
+    }
+
+    const duplicates = columns.filter(
+      (column, index) => columns.indexOf(column) !== index,
+    );
+
+    if (duplicates.length > 0) {
+      throw new Error(
+        `adminPanel.indexTableColumns contains duplicate values: ${[
+          ...new Set(duplicates),
+        ].join(", ")}`,
+      );
+    }
+
+    const invalidColumns = columns.filter(
+      (column) => !ALLOWED_INDEX_TABLE_COLUMNS.has(column),
+    );
+
+    if (invalidColumns.length > 0) {
+      throw new Error(
+        `adminPanel.indexTableColumns contains unsupported values: ${[
+          ...new Set(invalidColumns),
+        ].join(", ")}`,
+      );
+    }
+  },
 };

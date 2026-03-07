@@ -1,8 +1,8 @@
-const log = require("./log");
+const admin = require("./admin");
 
 module.exports = {
   admin: {
     type: "admin",
-    routes: log,
+    routes: admin,
   },
 };

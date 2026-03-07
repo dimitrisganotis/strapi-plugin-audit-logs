@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **German Translation**: Added `de` translations for the plugin admin UI
+- **Localized Admin UI**: Extended translation coverage across the audit logs page, modal, filters, pagination, and notifications
+- **Configurable Table Columns**: Added `adminPanel.indexTableColumns` to configure which audit log table columns are shown
+- **Direct Entry Links**: Added an optional `entry` table column that links matching `entry.*` logs to the Content Manager edit view
+
+### Changed
+
+- **User Display Priority**: Audit log user labels now prefer first and last name before username or email
+- **Locale-Aware Dates**: Audit log timestamps now use the browser locale instead of a fixed `en-GB` format
+
+### Fixed
+
+- **Plugin Config Structure**: Moved admin panel settings into the documented plugin config object and added validation for unsupported or duplicate columns
+- **Admin Config Route Permissions**: Restricted `/admin/audit-logs/config` to authenticated admins with audit log read access
+- **Admin UI Stability**: Added safe column fallbacks while admin config loads and removed dead/debug code from the PR implementation
+- **Action Labels**: Fixed the `admin.logout` translation key and corrected action badge variants for update, delete, and logout events
+
 ## [2.0.3] - 2025-06-11
 
 ### 🐛 Fixed
@@ -146,10 +167,3 @@ To upgrade from v1.x to v2.0.0:
 - Automatic redaction of sensitive fields (passwords, tokens, etc.)
 - Permission-based access to audit logs
 - Secure logging of user activities without exposing sensitive data
-
-## [Unreleased]
-
-### Planned
-
-- Export functionality for audit logs
-- Email notifications for critical events
