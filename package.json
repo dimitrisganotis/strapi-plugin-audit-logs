@@ -24,7 +24,11 @@
     "url": "git+https://github.com/dimitrisganotis/strapi-plugin-audit-logs.git"
   },
   "license": "MIT",
-  "author": "Dimitris Ganotis <dimitrisgan97@gmail.com>",
+  "author": {
+    "name": "Dimitris Ganotis",
+    "email": "hello@dganotis.dev",
+    "url": "https://www.dganotis.dev"
+  },
   "strapi": {
     "name": "audit-logs",
     "displayName": "Audit Logs",
