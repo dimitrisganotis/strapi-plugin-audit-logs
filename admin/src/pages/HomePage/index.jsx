@@ -134,6 +134,7 @@ const canOpenEntry = (log) =>
   Boolean(log?.payload?.uid) &&
   Boolean(log?.payload?.id);
 
+
 const HomePage = () => {
   const { formatMessage } = useIntl();
   const { get, post } = useFetchClient();
@@ -227,6 +228,65 @@ const HomePage = () => {
       setLoading(false);
     }
   };
+
+const exportToCSV = () => {
+  if (logs.length === 0) {
+    alert("data not available");
+    return;
+  }
+
+  const headers = displayColumns.map((col) => col).join(",");
+
+  const rows = logs.map((log) =>
+    displayColumns
+      .map((column) => {
+        let value = "";
+        switch (column) {
+          case "action":
+            value = log.action || "";
+            break;
+          case "date":
+            value = formatDateString(log.date);
+            break;
+          case "user":
+            value = getUserDisplay(log.user);
+            break;
+          case "method":
+            value = log.method || "";
+            break;
+          case "status":
+            value = log.statusCode || "";
+            break;
+          case "ipAddress":
+            value = log.ipAddress || "";
+            break;
+          case "entry":
+            value = log.payload?.uid
+              ? `${log.payload.uid}/${log.payload.id}`
+              : "";
+            break;
+          default:
+            value = "";
+        }
+        const str = String(value);
+        return str.includes(",") || str.includes('"') || str.includes("\n")
+          ? `"${str.replace(/"/g, '""')}"`
+          : str;
+      })
+      .join(",")
+  );
+
+  const csv = [headers, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+
+  link.href = url;
+  link.download = `audit-logs-${timestamp}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
   const handleCleanup = async () => {
     setIsCleaningUp(true);
@@ -359,6 +419,13 @@ const HomePage = () => {
               {formatMessage({
                 id: getTrad("button.refresh"),
               })}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={exportToCSV}
+              // disabled={logs.length === 0}
+            >
+              ↓ Export CSV
             </Button>
             {isSuperAdmin && (
               <Button
