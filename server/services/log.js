@@ -12,6 +12,9 @@ const outsideTransactionScope = new AsyncResource("audit-logs");
 // Upper bound for waiting on a response before falling back to its current status
 const RESPONSE_STATUS_TIMEOUT_MS = 30000;
 
+// Pending waits for a response to finish, keyed by the Node response
+const responseFinished = new WeakMap();
+
 module.exports = ({ strapi }) => ({
   async createLog(logData) {
     const config =
@@ -205,17 +208,28 @@ module.exports = ({ strapi }) => ({
     const res = ctx?.res;
 
     if (res && !res.writableFinished && !res.destroyed) {
-      await new Promise((resolve) => {
-        const done = () => {
-          clearTimeout(timer);
-          res.removeListener("finish", done);
-          res.removeListener("close", done);
-          resolve();
-        };
-        const timer = setTimeout(done, RESPONSE_STATUS_TIMEOUT_MS);
-        res.once("finish", done);
-        res.once("close", done);
-      });
+      // Share one wait per response: a single request can trigger many
+      // document operations (e.g. bulk delete), and attaching listeners for
+      // each one would exceed Node's max listeners limit
+      if (!responseFinished.has(res)) {
+        responseFinished.set(
+          res,
+          new Promise((resolve) => {
+            const done = () => {
+              clearTimeout(timer);
+              res.removeListener("finish", done);
+              res.removeListener("close", done);
+              resolve();
+            };
+            const timer = setTimeout(done, RESPONSE_STATUS_TIMEOUT_MS);
+            timer.unref();
+            res.once("finish", done);
+            res.once("close", done);
+          })
+        );
+      }
+
+      await responseFinished.get(res);
     }
 
     return res?.writableFinished ? ctx.response?.status : fallback;
