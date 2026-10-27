@@ -9,6 +9,9 @@ const { scheduleJob } = require("node-schedule");
 // "Invalid relations" once that transaction has been committed.
 const outsideTransactionScope = new AsyncResource("audit-logs");
 
+// Upper bound for waiting on a response before falling back to its current status
+const RESPONSE_STATUS_TIMEOUT_MS = 30000;
+
 module.exports = ({ strapi }) => ({
   async createLog(logData) {
     const config =
@@ -191,6 +194,31 @@ module.exports = ({ strapi }) => ({
     };
 
     return redact(data);
+  },
+
+  /**
+   * Resolve the HTTP status the client actually receives. Logs scheduled while
+   * a request is still in flight would otherwise see Koa's default 404, or
+   * miss the status that Strapi's error middleware assigns to thrown errors.
+   */
+  async getFinalStatusCode(ctx, fallback) {
+    const res = ctx?.res;
+
+    if (res && !res.writableFinished && !res.destroyed) {
+      await new Promise((resolve) => {
+        const done = () => {
+          clearTimeout(timer);
+          res.removeListener("finish", done);
+          res.removeListener("close", done);
+          resolve();
+        };
+        const timer = setTimeout(done, RESPONSE_STATUS_TIMEOUT_MS);
+        res.once("finish", done);
+        res.once("close", done);
+      });
+    }
+
+    return res?.writableFinished ? ctx.response?.status : fallback;
   },
 
   getClientIP(ctx) {
@@ -424,7 +452,10 @@ module.exports = ({ strapi }) => ({
           if (ctx) {
             logData.endpoint = ctx.request?.url;
             logData.method = ctx.request?.method;
-            logData.statusCode = ctx.response?.status;
+            logData.statusCode = await this.getFinalStatusCode(
+              ctx,
+              ctx.response?.status
+            );
             logData.ipAddress = this.getClientIP(ctx);
             logData.userAgent = ctx.request?.headers?.["user-agent"];
           }
@@ -565,7 +596,10 @@ module.exports = ({ strapi }) => ({
             const logData = {
               endpoint: ctx.request?.url,
               method: ctx.request?.method,
-              statusCode: error.status || 500,
+              statusCode: await this.getFinalStatusCode(
+                ctx,
+                error.status || 500
+              ),
               ipAddress: this.getClientIP(ctx),
               userAgent: ctx.request?.headers?.["user-agent"],
               loginAttempt: {
