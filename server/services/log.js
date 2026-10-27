@@ -1,6 +1,13 @@
 "use strict";
 
+const { AsyncResource } = require("node:async_hooks");
 const { scheduleJob } = require("node-schedule");
+
+// Created when the plugin is loaded at startup, so its async scope carries no
+// database transaction context. Logs are written from setTimeout callbacks that
+// would otherwise inherit the caller's transaction and fail with
+// "Invalid relations" once that transaction has been committed.
+const outsideTransactionScope = new AsyncResource("audit-logs");
 
 module.exports = ({ strapi }) => ({
   async createLog(logData) {
@@ -20,12 +27,14 @@ module.exports = ({ strapi }) => ({
       );
 
       // Use Document Service API for Strapi v5
-      const log = await strapi.documents("plugin::audit-logs.log").create({
-        data: {
-          ...redactedData,
-          date: new Date(),
-        },
-      });
+      const log = await outsideTransactionScope.runInAsyncScope(() =>
+        strapi.documents("plugin::audit-logs.log").create({
+          data: {
+            ...redactedData,
+            date: new Date(),
+          },
+        })
+      );
 
       return log;
     } catch (error) {
