@@ -5,12 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.4] - 2026-10-27
 
 ### Fixed
 
 - **Logs Lost Inside Transactions**: Audit log writes no longer inherit the caller's database transaction from the deferred `setTimeout` callbacks, which made them fail with `Invalid relations` when the transaction committed first (e.g. publishing from the Content Manager) (#7)
 - **Recorded Status Codes**: Document Service events and failed admin logins now record the final HTTP response status instead of Koa's in-flight default (`404`) or a hardcoded `500` (#6)
+- **Listener Warning on Bulk Operations**: Requests that trigger many Document Service operations (e.g. bulk delete) share a single wait for the response instead of attaching listeners per operation, avoiding `MaxListenersExceededWarning`
 
 ## [2.1.3] - 2026-05-16
 
